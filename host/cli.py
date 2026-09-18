@@ -8,6 +8,8 @@ import subprocess
 import sys
 
 from .assembly import AssemblyError, parse_file
+from .backend import BackendError, Domain
+from .checker import check, replay_witness, write_witness
 from .symbolic import explore
 from .vm import run
 
@@ -33,6 +35,19 @@ def parser() -> argparse.ArgumentParser:
     explore_parser.add_argument("--expr-nodes", type=int, default=1024)
     explore_parser.add_argument("--no-simplify", action="store_true")
     explore_parser.add_argument("--json", action="store_true")
+    check_parser = commands.add_parser("check", help="search finite input domains for a counterexample")
+    check_parser.add_argument("program")
+    check_parser.add_argument("--domain", action="append", default=[], metavar="I=START..END")
+    check_parser.add_argument("--steps", type=int, default=256)
+    check_parser.add_argument("--state-budget", type=int, default=4096)
+    check_parser.add_argument("--candidate-budget", type=int, default=65536)
+    check_parser.add_argument("--backend", choices=["cpu", "gpu"], default="cpu")
+    check_parser.add_argument("--threads", type=int, default=0)
+    check_parser.add_argument("--gpu-memory", default="1GB")
+    check_parser.add_argument("--witness")
+    check_parser.add_argument("--json", action="store_true")
+    replay_parser = commands.add_parser("replay", help="replay and validate a witness artifact")
+    replay_parser.add_argument("witness")
     return root
 
 
@@ -41,6 +56,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "doctor":
             return doctor()
+        if args.command == "replay":
+            outcome = replay_witness(args.witness)
+            print(f"REPLAYED {outcome.kind.value} pc={outcome.pc} steps={outcome.steps}")
+            return 0
         program = parse_file(args.program)
         if args.command == "explore":
             result = explore(program, args.steps, args.state_budget, args.expr_nodes, not args.no_simplify)
@@ -61,6 +80,26 @@ def main(argv: list[str] | None = None) -> int:
                 for query in result.queries:
                     print(f"query {query.id}: {query.kind} at pc={query.pc}: {query.predicate.render()}")
             return 3 if result.incomplete else 0
+        if args.command == "check":
+            domains = parse_domains(args.domain, program.inputs)
+            result = check(program, domains, args.steps, args.state_budget, args.candidate_budget, args.backend, args.threads, args.gpu_memory)
+            payload = {
+                "status": result.status,
+                "checked_candidates": result.checked_candidates,
+                "total_candidates": result.total_candidates,
+                "bounded_paths": result.bounded_paths,
+                "candidate_index": result.candidate_index,
+                "inputs": list(result.inputs) if result.inputs is not None else None,
+                "detail": result.detail,
+            }
+            if result.outcome is not None:
+                payload["failure"] = {"kind": result.outcome.kind.value, "pc": result.outcome.pc, "steps": result.outcome.steps}
+            print(json.dumps(payload, sort_keys=True) if args.json else format_check(payload))
+            if args.witness:
+                if result.status != "COUNTEREXAMPLE":
+                    raise ValueError("--witness requires a counterexample")
+                write_witness(args.witness, program, domains, args.steps, args.backend, result)
+            return {"EXHAUSTED_SCOPE": 0, "COUNTEREXAMPLE": 1, "INCOMPLETE": 3}[result.status]
         inputs = [] if not args.inputs else [int(item.strip(), 0) for item in args.inputs.split(",")]
         outcome = run(program, inputs, args.steps)
         result = {
@@ -83,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.trace:
                 print("trace=" + ",".join(map(str, outcome.trace)))
         return 1 if outcome.bad else 0
-    except (AssemblyError, ValueError, OSError) as error:
+    except (AssemblyError, BackendError, RuntimeError, ValueError, OSError, json.JSONDecodeError, KeyError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
@@ -99,6 +138,33 @@ def doctor() -> int:
             failed = True
             print(f"{name}: unavailable ({error})")
     return 2 if failed else 0
+
+
+def parse_domains(specifications: list[str], inputs: int) -> tuple[Domain, ...]:
+    parsed: dict[int, Domain] = {}
+    for specification in specifications:
+        try:
+            index_text, bounds = specification.split("=", 1)
+            start_text, end_text = bounds.split("..", 1)
+            index = int(index_text)
+            domain = Domain(int(start_text, 0), int(end_text, 0))
+        except ValueError as error:
+            raise ValueError(f"invalid domain {specification!r}; expected I=START..END") from error
+        if index in parsed:
+            raise ValueError(f"duplicate domain for input {index}")
+        parsed[index] = domain
+    if set(parsed) != set(range(inputs)):
+        raise ValueError(f"provide exactly one --domain for each input 0..{inputs - 1}")
+    return tuple(parsed[index] for index in range(inputs))
+
+
+def format_check(payload: dict) -> str:
+    lines = [payload["status"], f"checked={payload['checked_candidates']}/{payload['total_candidates']} bounded_paths={payload['bounded_paths']}"]
+    if payload["inputs"] is not None:
+        lines.append(f"candidate={payload['candidate_index']} inputs={payload['inputs']}")
+    if payload["detail"]:
+        lines.append(payload["detail"])
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
