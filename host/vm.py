@@ -35,7 +35,7 @@ class Outcome:
 def run(program: Program, inputs: list[int] | tuple[int, ...], steps: int = 256) -> Outcome:
     if len(inputs) != program.inputs:
         raise ValueError(f"expected {program.inputs} inputs, got {len(inputs)}")
-    if steps < 0:
+    if not isinstance(steps, int) or isinstance(steps, bool) or steps < 0:
         raise ValueError("steps must be non-negative")
     words = tuple(_word(value) for value in inputs)
     stack: list[int] = []
@@ -101,7 +101,7 @@ def run(program: Program, inputs: list[int] | tuple[int, ...], steps: int = 256)
 
 
 def _word(value: int) -> int:
-    if value < 0 or value > MASK:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0 or value > MASK:
         raise ValueError(f"input {value} is outside U32")
     return value
 

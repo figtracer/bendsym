@@ -78,13 +78,52 @@ def write_witness(path: str | Path, program: Program, domains: tuple[Domain, ...
 
 def replay_witness(path: str | Path) -> Outcome:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("witness must be a JSON object")
     if payload.get("artifact_version") != ARTIFACT_VERSION or payload.get("vm_semantics") != "bendsym-u32-v1":
         raise ValueError("unsupported witness version")
-    source = payload["program"]
+    source = payload.get("program")
+    if not isinstance(source, str):
+        raise ValueError("witness program must be a string")
     if hashlib.sha256(source.encode()).hexdigest() != payload.get("program_sha256"):
         raise ValueError("witness program digest does not match")
-    outcome = run(parse(source), payload["inputs"], payload["steps"])
-    failure = payload["failure"]
+    program = parse(source)
+    domains_data = payload.get("domains")
+    inputs = payload.get("inputs")
+    candidate_index = payload.get("candidate_index")
+    steps = payload.get("steps")
+    if not isinstance(domains_data, list) or len(domains_data) != program.inputs:
+        raise ValueError("witness domains do not match declared inputs")
+    domains: list[Domain] = []
+    for item in domains_data:
+        if not isinstance(item, dict) or not _integer(item.get("start")) or not _integer(item.get("end")):
+            raise ValueError("witness contains an invalid domain")
+        domain = Domain(item["start"], item["end"])
+        if domain.start < 0 or domain.end < domain.start or domain.end > U32_MAX:
+            raise ValueError("witness contains an invalid U32 domain")
+        domains.append(domain)
+    if not isinstance(inputs, list) or len(inputs) != program.inputs or any(not _integer(value) or value < 0 or value > U32_MAX for value in inputs):
+        raise ValueError("witness inputs must be declared U32 integers")
+    if not _integer(candidate_index) or candidate_index < 0:
+        raise ValueError("witness candidate index must be non-negative")
+    total = 1
+    for domain in domains:
+        total *= domain.size
+    if candidate_index >= total or decode_candidate(candidate_index, tuple(domains)) != tuple(inputs):
+        raise ValueError("witness candidate index, domains, and inputs disagree")
+    if not _integer(steps) or steps < 0:
+        raise ValueError("witness steps must be a non-negative integer")
+    failure = payload.get("failure")
+    if not isinstance(failure, dict):
+        raise ValueError("witness failure must be an object")
+    if not isinstance(failure.get("kind"), str) or not _integer(failure.get("pc")) or not _integer(failure.get("steps")):
+        raise ValueError("witness failure metadata is invalid")
+    trace = failure.get("trace")
+    if not isinstance(trace, list) or any(not _integer(pc) or pc < 0 for pc in trace):
+        raise ValueError("witness trace must contain non-negative integers")
+    if failure.get("reason") is not None and not isinstance(failure.get("reason"), str):
+        raise ValueError("witness failure reason is invalid")
+    outcome = run(program, inputs, steps)
     if not outcome.bad or outcome.kind.value != failure["kind"] or outcome.pc != failure["pc"] or outcome.steps != failure["steps"] or list(outcome.trace) != failure["trace"]:
         raise RuntimeError("witness replay mismatch")
     return outcome
@@ -96,3 +135,7 @@ def _validate_domains(program: Program, domains: tuple[Domain, ...]) -> None:
     for domain in domains:
         if domain.start < 0 or domain.end < domain.start or domain.end > U32_MAX:
             raise ValueError("invalid U32 domain")
+
+
+def _integer(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)

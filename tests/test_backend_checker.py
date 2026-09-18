@@ -63,6 +63,38 @@ class CheckerTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "digest"):
                 replay_witness(path)
 
+    def test_branch_witness_round_trips(self):
+        program = parse(".inputs 1\nINPUT 0\nJNZ bad\nHALT\nbad:\nPUSH 0\nASSERT\n")
+        result = check(program, (Domain(0, 1),), 16, 100, 2, "cpu")
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "branch.json"
+            write_witness(path, program, (Domain(0, 1),), 16, "cpu", result)
+            self.assertEqual(replay_witness(path).pc, 4)
+
+    def test_replay_rejects_non_integer_and_inconsistent_scope(self):
+        program = parse(".inputs 1\nPUSH 0\nASSERT\n")
+        result = check(program, (Domain(0, 1),), 8, 100, 2, "cpu")
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "witness.json"
+            write_witness(path, program, (Domain(0, 1),), 8, "cpu", result)
+            payload = json.loads(path.read_text())
+            payload["inputs"] = [0.0]
+            path.write_text(json.dumps(payload))
+            with self.assertRaisesRegex(ValueError, "U32 integers"):
+                replay_witness(path)
+            payload["inputs"] = [0]
+            payload["candidate_index"] = 1
+            path.write_text(json.dumps(payload))
+            with self.assertRaisesRegex(ValueError, "disagree"):
+                replay_witness(path)
+
+    def test_replay_rejects_non_object(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "witness.json"
+            path.write_text("[]")
+            with self.assertRaisesRegex(ValueError, "JSON object"):
+                replay_witness(path)
+
 
 if __name__ == "__main__":
     unittest.main()

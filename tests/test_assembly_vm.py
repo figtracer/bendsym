@@ -17,6 +17,14 @@ class AssemblyTest(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "unknown label"):
             parse("JMP missing\n")
 
+    def test_canonical_round_trips_forward_backward_and_end_jumps(self):
+        program = parse("start:\nPUSH 0\nJNZ end\nJMP start\nend:\n")
+        reparsed = parse(program.canonical())
+        self.assertEqual(
+            [(ins.opcode, ins.operand) for ins in reparsed.instructions],
+            [(ins.opcode, ins.operand) for ins in program.instructions],
+        )
+
 
 class ConcreteVmTest(unittest.TestCase):
     def test_wrapping_and_operand_order(self):

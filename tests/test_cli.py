@@ -34,9 +34,23 @@ class CliTest(unittest.TestCase):
             self.assertIn("REPLAYED assertion_failed", replay.stdout)
 
     def test_missing_domain_is_an_error(self):
-        result = self.invoke("check", "examples/wrapping-counter.bsvm")
+        result = self.invoke("check", "examples/wrapping-counter.bsvm", "--json")
         self.assertEqual(result.returncode, 2)
-        self.assertIn("provide exactly one", result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "ERROR")
+
+    def test_witness_option_does_not_change_exhausted_result(self):
+        with tempfile.TemporaryDirectory() as directory:
+            witness = pathlib.Path(directory) / "absent.json"
+            result = self.invoke(
+                "check", "examples/wrapping-counter.bsvm", "--domain", "0=0..1",
+                "--witness", str(witness), "--json",
+            )
+            self.assertEqual(result.returncode, 0)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "EXHAUSTED_SCOPE")
+            self.assertEqual(payload["steps"], 256)
+            self.assertEqual(payload["domains"], [{"start": 0, "end": 1}])
+            self.assertFalse(witness.exists())
 
 
 if __name__ == "__main__":

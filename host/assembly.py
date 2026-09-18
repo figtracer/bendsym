@@ -27,9 +27,15 @@ class Program:
 
     def canonical(self) -> str:
         lines = [f".inputs {self.inputs}", f".memory {self.memory}"]
-        for ins in self.instructions:
-            suffix = "" if ins.operand is None else f" {ins.operand}"
+        targets = {ins.operand for ins in self.instructions if ins.opcode in LABEL_OPERAND}
+        for index, ins in enumerate(self.instructions):
+            if index in targets:
+                lines.append(f"L{index}:")
+            operand = f"L{ins.operand}" if ins.opcode in LABEL_OPERAND else ins.operand
+            suffix = "" if operand is None else f" {operand}"
             lines.append(f"{ins.opcode}{suffix}")
+        if len(self.instructions) in targets:
+            lines.append(f"L{len(self.instructions)}:")
         return "\n".join(lines) + "\n"
 
 

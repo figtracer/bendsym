@@ -87,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
                 "status": result.status,
                 "checked_candidates": result.checked_candidates,
                 "total_candidates": result.total_candidates,
+                "domains": [{"start": domain.start, "end": domain.end} for domain in domains],
+                "steps": args.steps,
                 "bounded_paths": result.bounded_paths,
                 "candidate_index": result.candidate_index,
                 "inputs": list(result.inputs) if result.inputs is not None else None,
@@ -94,11 +96,9 @@ def main(argv: list[str] | None = None) -> int:
             }
             if result.outcome is not None:
                 payload["failure"] = {"kind": result.outcome.kind.value, "pc": result.outcome.pc, "steps": result.outcome.steps}
-            print(json.dumps(payload, sort_keys=True) if args.json else format_check(payload))
-            if args.witness:
-                if result.status != "COUNTEREXAMPLE":
-                    raise ValueError("--witness requires a counterexample")
+            if args.witness and result.status == "COUNTEREXAMPLE":
                 write_witness(args.witness, program, domains, args.steps, args.backend, result)
+            print(json.dumps(payload, sort_keys=True) if args.json else format_check(payload))
             return {"EXHAUSTED_SCOPE": 0, "COUNTEREXAMPLE": 1, "INCOMPLETE": 3}[result.status]
         inputs = [] if not args.inputs else [int(item.strip(), 0) for item in args.inputs.split(",")]
         outcome = run(program, inputs, args.steps)
@@ -123,7 +123,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("trace=" + ",".join(map(str, outcome.trace)))
         return 1 if outcome.bad else 0
     except (AssemblyError, BackendError, RuntimeError, ValueError, OSError, json.JSONDecodeError, KeyError) as error:
-        print(f"error: {error}", file=sys.stderr)
+        if getattr(args, "json", False):
+            print(json.dumps({"status": "ERROR", "detail": str(error)}, sort_keys=True))
+        else:
+            print(f"error: {error}", file=sys.stderr)
         return 2
 
 
@@ -159,7 +162,7 @@ def parse_domains(specifications: list[str], inputs: int) -> tuple[Domain, ...]:
 
 
 def format_check(payload: dict) -> str:
-    lines = [payload["status"], f"checked={payload['checked_candidates']}/{payload['total_candidates']} bounded_paths={payload['bounded_paths']}"]
+    lines = [payload["status"], f"checked={payload['checked_candidates']}/{payload['total_candidates']} steps={payload['steps']} domains={payload['domains']} bounded_paths={payload['bounded_paths']}"]
     if payload["inputs"] is not None:
         lines.append(f"candidate={payload['candidate_index']} inputs={payload['inputs']}")
     if payload["detail"]:

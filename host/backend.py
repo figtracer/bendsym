@@ -34,6 +34,8 @@ def balanced_search(predicates: tuple[Expr, ...], domains: tuple[Domain, ...], c
         raise ValueError("candidate count must fit U32")
     if backend not in {"cpu", "gpu"}:
         raise ValueError("backend must be cpu or gpu")
+    if backend == "gpu" and gpu_memory.lower() == "off":
+        raise ValueError("GPU memory cannot be 'off' for a GPU search")
     depth = 0
     leaves = 1
     while leaves < max(1, candidates):
