@@ -1,5 +1,6 @@
 import json
 import pathlib
+import sys
 import tempfile
 import unittest
 
@@ -23,7 +24,13 @@ class BendBackendTest(unittest.TestCase):
         predicate = factory.binary("ULT", factory.const(13), x)
         domains = (Domain(0, 31),)
         self.assertEqual(balanced_search((predicate,), domains, 32, "cpu"), 14)
-        self.assertEqual(balanced_search((predicate,), domains, 32, "gpu"), 14)
+        if sys.platform == "darwin":
+            self.assertEqual(balanced_search((predicate,), domains, 32, "gpu"), 14)
+
+    def test_full_u32_domain_does_not_emit_out_of_range_literal(self):
+        factory = ExprFactory()
+        predicate = factory.binary("EQ", factory.input(0), factory.const(3))
+        self.assertEqual(balanced_search((predicate,), (Domain(0, 4294967295),), 4, "cpu"), 3)
 
 
 class CheckerTest(unittest.TestCase):

@@ -1,7 +1,10 @@
 BEND ?= bun ../bend/bend2/main.ts
 BUILD_DIR := .build
 
-.PHONY: build smoke test clean
+.PHONY: setup build smoke test clean
+
+setup:
+	./scripts/setup-toolchain.sh
 
 build: $(BUILD_DIR)/smoke
 

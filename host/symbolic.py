@@ -233,6 +233,14 @@ def explore(program: Program, steps: int = 256, state_budget: int = 4096, max_ex
                 base = _State(next_pc, next_fuel, tuple(stack), tuple(memory), constraints)
                 if opcode == "ASSERT":
                     add_query(state, "assertion_failed", zero)
+                if opcode == "JNZ":
+                    zero_state = _State(next_pc, next_fuel, tuple(stack), tuple(memory), constraints + (() if zero.op == "CONST" else (zero,)))
+                    nonzero_state = _State(ins.operand, next_fuel, tuple(stack), tuple(memory), constraints + (() if nonzero.op == "CONST" else (nonzero,)))
+                    if nonzero.op != "CONST" or nonzero.value != 0:
+                        work.append(nonzero_state)
+                    if zero.op != "CONST" or zero.value != 0:
+                        work.append(zero_state)
+                    continue
                 if opcode == "ASSUME" and zero.op == "CONST" and zero.value != 0:
                     rejected += 1
                     continue
@@ -244,14 +252,6 @@ def explore(program: Program, steps: int = 256, state_budget: int = 4096, max_ex
                     continue
                 if nonzero.op != "CONST":
                     base = _State(base.pc, base.fuel, base.stack, base.memory, constraints + (nonzero,))
-                if opcode == "JNZ":
-                    zero_state = _State(next_pc, next_fuel, tuple(stack), tuple(memory), constraints + (() if zero.op == "CONST" else (zero,)))
-                    nonzero_state = _State(ins.operand, next_fuel, base.stack, base.memory, base.constraints)
-                    if nonzero.op != "CONST" or nonzero.value != 0:
-                        work.append(nonzero_state)
-                    if zero.op != "CONST" or zero.value != 0:
-                        work.append(zero_state)
-                    continue
                 work.append(base)
                 continue
             elif opcode == "HALT":

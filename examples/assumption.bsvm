@@ -1,0 +1,11 @@
+.inputs 2
+.memory 0
+
+# Under x != 0, require x - y to be nonzero.
+INPUT 0
+ASSUME
+INPUT 0
+INPUT 1
+SUB
+ASSERT
+HALT

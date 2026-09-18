@@ -39,7 +39,7 @@ def balanced_search(predicates: tuple[Expr, ...], domains: tuple[Domain, ...], c
     while leaves < max(1, candidates):
         depth += 1
         leaves *= 2
-    source = generate_source(predicates, domains, candidates, depth)
+    source = generate_source(predicates, domains, candidates, depth, backend == "gpu")
     digest = hashlib.sha256(source.encode()).hexdigest()[:20]
     CACHE.mkdir(parents=True, exist_ok=True)
     bend_file = CACHE / f"search-{digest}.bend"
@@ -79,13 +79,18 @@ def decode_candidate(index: int, domains: tuple[Domain, ...]) -> tuple[int, ...]
     return tuple(values)
 
 
-def generate_source(predicates: tuple[Expr, ...], domains: tuple[Domain, ...], candidates: int, depth: int) -> str:
+def generate_source(predicates: tuple[Expr, ...], domains: tuple[Domain, ...], candidates: int, depth: int, use_gpu: bool = False) -> str:
     input_defs = []
     stride = 1
     for index, domain in enumerate(domains):
+        if stride > 2**32 - 1:
+            offset = "0"
+        else:
+            quotient = f"U32.div(idx, {stride})"
+            offset = quotient if domain.size == 2**32 else f"U32.mod({quotient}, {domain.size})"
         input_defs.append(
             f"def input_{index}(+idx: U32) -> U32:\n"
-            f"  U32.add({domain.start}, U32.mod(U32.div(idx, {stride}), {domain.size}))\n"
+            f"  U32.add({domain.start}, {offset})\n"
         )
         stride *= domain.size
     rendered = [_render(predicate, "idx") for predicate in predicates]
@@ -150,7 +155,7 @@ def show(hit: Hit) -> String:
       U32.show(index)
 
 def main() -> IO(Unit):
-  IO.print(show(search!({depth}n, 0, {candidates})))
+  IO.print(show(search{'!' if use_gpu else ''}({depth}n, 0, {candidates})))
 """
 
 

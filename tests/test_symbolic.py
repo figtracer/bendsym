@@ -45,6 +45,12 @@ class SymbolicExplorerTest(unittest.TestCase):
             [range(4)],
         )
 
+    def test_constant_false_branch_takes_fallthrough(self):
+        self.assert_differential(
+            "PUSH 0\nJNZ taken\nPUSH 0\nASSERT\nHALT\ntaken:\nPUSH 1\nASSERT\nHALT\n",
+            [],
+        )
+
     def test_assumption_and_two_input_arithmetic(self):
         self.assert_differential(
             ".inputs 2\nINPUT 0\nASSUME\nINPUT 0\nINPUT 1\nSUB\nASSERT\nHALT\n",
