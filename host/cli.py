@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from .assembly import AssemblyError, parse_file
+from .symbolic import explore
 from .vm import run
 
 
@@ -25,6 +26,13 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--steps", type=int, default=256)
     run_parser.add_argument("--trace", action="store_true")
     run_parser.add_argument("--json", action="store_true")
+    explore_parser = commands.add_parser("explore", help="enumerate symbolic failure paths")
+    explore_parser.add_argument("program")
+    explore_parser.add_argument("--steps", type=int, default=256)
+    explore_parser.add_argument("--state-budget", type=int, default=4096)
+    explore_parser.add_argument("--expr-nodes", type=int, default=1024)
+    explore_parser.add_argument("--no-simplify", action="store_true")
+    explore_parser.add_argument("--json", action="store_true")
     return root
 
 
@@ -34,6 +42,25 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "doctor":
             return doctor()
         program = parse_file(args.program)
+        if args.command == "explore":
+            result = explore(program, args.steps, args.state_budget, args.expr_nodes, not args.no_simplify)
+            payload = {
+                "status": "incomplete" if result.incomplete else "explored",
+                "expansions": result.expansions,
+                "halted_paths": result.halted_paths,
+                "rejected_paths": result.rejected_paths,
+                "bounded_paths": result.bounded_paths,
+                "incomplete_paths": result.incomplete_paths,
+                "queries": [{"id": query.id, "pc": query.pc, "kind": query.kind, "predicate": query.predicate.render(), "nodes": query.predicate.nodes} for query in result.queries],
+            }
+            if args.json:
+                print(json.dumps(payload, sort_keys=True))
+            else:
+                print(payload["status"].upper())
+                print(f"expansions={result.expansions} queries={len(result.queries)} halted={result.halted_paths} rejected={result.rejected_paths} bounded={result.bounded_paths} incomplete={result.incomplete_paths}")
+                for query in result.queries:
+                    print(f"query {query.id}: {query.kind} at pc={query.pc}: {query.predicate.render()}")
+            return 3 if result.incomplete else 0
         inputs = [] if not args.inputs else [int(item.strip(), 0) for item in args.inputs.split(",")]
         outcome = run(program, inputs, args.steps)
         result = {
