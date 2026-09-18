@@ -1,0 +1,17 @@
+.inputs 1
+.memory 1
+
+INPUT 0
+JNZ nonzero
+PUSH 7
+STORE 0
+JMP check
+nonzero:
+PUSH 9
+STORE 0
+check:
+LOAD 0
+PUSH 7
+EQ
+ASSERT
+HALT

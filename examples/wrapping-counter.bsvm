@@ -1,0 +1,11 @@
+.inputs 1
+.memory 0
+
+# The claim x + 1 > x fails exactly at U32::MAX.
+INPUT 0
+DUP
+PUSH 1
+ADD
+ULT
+ASSERT
+HALT
