@@ -1,0 +1,21 @@
+BEND ?= bun ../bend/bend2/main.ts
+BUILD_DIR := .build
+
+.PHONY: build smoke test clean
+
+build: $(BUILD_DIR)/smoke
+
+$(BUILD_DIR):
+	mkdir -p $@
+
+$(BUILD_DIR)/smoke: src/Smoke.bend | $(BUILD_DIR)
+	$(BEND) $< -o $@
+
+smoke: build
+	./$(BUILD_DIR)/smoke --threads 4
+
+test:
+	python3 -m unittest discover -s tests -v
+
+clean:
+	rm -rf $(BUILD_DIR)
