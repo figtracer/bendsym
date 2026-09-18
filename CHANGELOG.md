@@ -7,3 +7,4 @@
 - Added expression simplification with raw/simplified differential checks.
 - Added balanced finite-domain witness search on Bend CPU and Metal backends.
 - Added portable, digest-protected counterexample artifacts and replay.
+- Added an exhaustive Foundry overflow-rewrite case and strictness mutant.

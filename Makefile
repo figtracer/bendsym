@@ -1,7 +1,7 @@
 BEND ?= bun ../bend/bend2/main.ts
 BUILD_DIR := .build
 
-.PHONY: setup build smoke test clean
+.PHONY: setup build smoke rewrite-demo test clean
 
 setup:
 	./scripts/setup-toolchain.sh
@@ -16,6 +16,9 @@ $(BUILD_DIR)/smoke: src/Smoke.bend | $(BUILD_DIR)
 
 smoke: build
 	./$(BUILD_DIR)/smoke --threads 4
+
+rewrite-demo:
+	./scripts/try-add-overflow-rewrite.sh cpu
 
 test:
 	python3 -m unittest discover -s tests -v

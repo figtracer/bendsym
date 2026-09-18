@@ -33,6 +33,20 @@ The check reports candidate 5, input `4294967295`, where the claim `x < x + 1`
 fails under wrapping U32 arithmetic. Replace `--backend gpu` with `cpu` on any
 supported machine.
 
+## First real use case: rewrite soundness
+
+BendSym includes a reduced-width validation of Foundry's addition-overflow
+normalization. It exhausts all 65,536 8-bit input pairs, then checks a deliberately
+incorrect `<` to `<=` mutant and replays the boundary counterexample:
+
+```sh
+./scripts/try-add-overflow-rewrite.sh cpu
+./scripts/try-add-overflow-rewrite.sh gpu
+```
+
+See [bit-vector rewrite validation](docs/use-cases/rewrite-validation.md) for the
+identity, scope, and interpretation of the result.
+
 ## VM programs
 
 Programs are small stack-machine assemblies:

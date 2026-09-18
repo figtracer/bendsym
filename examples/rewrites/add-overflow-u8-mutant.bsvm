@@ -1,0 +1,26 @@
+.inputs 2
+.memory 0
+
+# Deliberately wrong: the rewritten side uses <= instead of <.
+
+# Original overflow comparison.
+INPUT 0
+INPUT 1
+ADD
+PUSH 255
+AND
+INPUT 0
+ULT
+
+# Mutant: (base ^ 0xff) <= increment, encoded as !(increment < complement).
+INPUT 1
+INPUT 0
+PUSH 255
+XOR
+ULT
+PUSH 1
+XOR
+
+EQ
+ASSERT
+HALT

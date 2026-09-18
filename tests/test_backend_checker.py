@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 
-from host.assembly import parse
+from host.assembly import parse, parse_file
 from host.backend import Domain, balanced_search, decode_candidate
 from host.checker import check, replay_witness, write_witness
 from host.symbolic import ExprFactory
@@ -94,6 +94,17 @@ class CheckerTest(unittest.TestCase):
             path.write_text("[]")
             with self.assertRaisesRegex(ValueError, "JSON object"):
                 replay_witness(path)
+
+    def test_add_overflow_rewrite_and_strictness_mutant(self):
+        domains = (Domain(0, 255), Domain(0, 255))
+        correct = parse_file(pathlib.Path(__file__).parents[1] / "examples/rewrites/add-overflow-u8.bsvm")
+        mutant = parse_file(pathlib.Path(__file__).parents[1] / "examples/rewrites/add-overflow-u8-mutant.bsvm")
+        exhausted = check(correct, domains, 64, 100, 65536, "cpu")
+        counterexample = check(mutant, domains, 64, 100, 65536, "cpu")
+        self.assertEqual(exhausted.status, "EXHAUSTED_SCOPE")
+        self.assertEqual(counterexample.status, "COUNTEREXAMPLE")
+        self.assertEqual(counterexample.candidate_index, 255)
+        self.assertEqual(counterexample.inputs, (255, 0))
 
 
 if __name__ == "__main__":

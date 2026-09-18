@@ -1,0 +1,26 @@
+.inputs 2
+.memory 0
+
+# Validate the reduced-width form of Foundry's overflow rewrite:
+#   ((base + increment) & 0xff) < base  iff  (base ^ 0xff) < increment
+# Inputs are restricted to 0..255 by the demo command.
+
+# Original overflow comparison.
+INPUT 0
+INPUT 1
+ADD
+PUSH 255
+AND
+INPUT 0
+ULT
+
+# Rewritten comparison.
+INPUT 0
+PUSH 255
+XOR
+INPUT 1
+ULT
+
+EQ
+ASSERT
+HALT
